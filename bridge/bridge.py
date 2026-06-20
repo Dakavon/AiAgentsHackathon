@@ -67,17 +67,18 @@ HERMES_API_KEY = os.environ.get("HERMES_API_KEY", "hermes")
 
 SYSTEM_PROMPT = (
     "You are Amtomat, a multilingual public-administration assistant (a "
-    "conversational 'Ämterservice') reachable over the Status messenger. You help "
-    "residents navigate "
-    "municipal and government services such as registering a residence, ID and "
-    "passport, vehicle registration, business registration, certificates and "
-    "permits. For a request, name the responsible office, the documents needed, "
-    "any fees and processing time. When the request needs an in-person visit (for "
-    "example a lost passport or ID, or a residence registration), reserve an "
-    "appointment with the reserve_appointment tool, and tell the person the office and "
-    "the documents to bring. Do not write the appointment time, the reference code, or "
-    "a confirmation link yourself; the system appends those. Reply in the user's "
-    "language. Be concrete and step-by-step. Keep replies short and actionable."
+    "conversational 'Ämterservice') reachable over the Status messenger. First and "
+    "foremost, have a normal, helpful conversation about municipal and government "
+    "services: the responsible office, required documents, fees, processing times, "
+    "opening hours, and how procedures work, for things like residence registration, "
+    "ID and passport, vehicle registration, business registration, certificates and "
+    "permits. Answer questions directly. "
+    "Only use the reserve_appointment tool when the person actually wants to start a "
+    "procedure that needs an in-person visit, or explicitly asks for an appointment. "
+    "For general questions, just answer; you may offer to book an appointment instead "
+    "of booking one. When you do reserve, do not write the appointment time, the "
+    "reference code, or a confirmation link yourself; the system appends those. "
+    "Reply in the user's language. Be concrete and helpful."
 )
 
 _history: dict[str, list[dict]] = {}
@@ -165,6 +166,13 @@ TOOLS = [
     }
 ]
 
+# The booking tool is only offered when the user shows booking intent, so normal
+# questions stay a normal conversation instead of always booking an appointment.
+BOOKING_KEYWORDS = (
+    "termin", "appointment", "buchen", "book", "reservier", "reserve",
+    "schedule", "vereinbar",
+)
+
 
 def reserve_appointment(session_id: str, office: str, when: str) -> dict:
     """Build a data-minimal confirmation, store it on Swarm, return the result."""
@@ -218,12 +226,16 @@ def ask_llm(session_id: str, user_text: str) -> str:
     history = _history.setdefault(session_id, [{"role": "system", "content": SYSTEM_PROMPT}])
     # work on a copy so tool-call/result pairs do not pollute the rolling history
     msgs = list(history) + [{"role": "user", "content": user_text}]
+    # offer the booking tool only on booking intent; otherwise it is a plain chat
+    wants_booking = any(k in user_text.lower() for k in BOOKING_KEYWORDS)
     final = ""
     reserved = None
     for _ in range(4):  # allow a couple of tool rounds
-        resp = _llm.chat.completions.create(
-            model=NEBIUS_MODEL, messages=msgs, tools=TOOLS, tool_choice="auto"
-        )
+        kwargs = {"model": NEBIUS_MODEL, "messages": msgs}
+        if wants_booking:
+            kwargs["tools"] = TOOLS
+            kwargs["tool_choice"] = "auto"
+        resp = _llm.chat.completions.create(**kwargs)
         m = resp.choices[0].message
         if not m.tool_calls:
             final = m.content or ""
