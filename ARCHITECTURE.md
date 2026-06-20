@@ -1,11 +1,12 @@
 # Amtomat: Architecture
 
-A conversational *Ämterservice* (public-administration assistant) reachable over the
-**Status** messenger (web3-native, no phone number, end-to-end encrypted). Residents
-ask in natural language which office is responsible, the documents required, fees and
-how to book an appointment. Inference runs on **Nebius Token Factory**, and an optional
-**Hermes** layer can add per-user memory and tool-calling. Built for the BGA tracks
-(public infrastructure, real-world Web3, decentralized AI) and Nebius.
+A private AI agent for public administration, reachable over the **Status** messenger
+(web3-native, no phone number, end-to-end encrypted). Residents ask in natural language;
+the agent names the responsible office and documents and, when an in-person visit is
+needed, **reserves an appointment** and stores a tamper-proof, PII-free confirmation on
+**Swarm**. Inference runs on **Nebius Token Factory**, and an optional **Hermes** layer
+can add per-user memory and richer tool-calling. Built for the **Infrastructure** (the
+Status bridge) and **BGA** tracks, powered by Nebius.
 
 ## Stack (decided)
 
@@ -15,6 +16,8 @@ how to book an appointment. Inference runs on **Nebius Token Factory**, and an o
 | Node | **status-go / status-backend**, headless in **Docker** |
 | Bridge | **Python** (signals listener plus RPC client) |
 | LLM | **Nebius Token Factory** (`meta-llama/Llama-3.3-70B-Instruct`) |
+| Storage | **Swarm** via a **Bee** node (dev mode), for appointment confirmations |
+| Agent tool | `reserve_appointment` stores a confirmation on Swarm (LLM tool-call) |
 | Agent layer | Bridge to Nebius **direct** (current); **Hermes** optional (memory, tools) |
 | Use case | **Ämterservice** assistant: municipal and government services, multilingual |
 | Runtime | laptop (containerized) |
@@ -39,6 +42,9 @@ Bridge (Python)
    |    hermes: bridge calls Hermes (per-user memory, tool-calling); Hermes calls Nebius
    v
 Nebius Token Factory   Llama-3.3-70B-Instruct   (inference, tool-calling)
+
+When the model calls reserve_appointment:
+   Bridge  ->  Bee node  ->  Swarm (confirmation hash)  ->  hash appended to the reply
 ```
 
 ## Message round-trip
@@ -65,6 +71,25 @@ Nebius Token Factory   Llama-3.3-70B-Instruct   (inference, tool-calling)
   Hermes manages per-session memory and tool-calling. `X-Hermes-Session-Id` is the
   user's chat key, so each user gets an isolated context.
 
+## Appointment confirmation on Swarm
+
+When a request needs an in-person visit, the model calls the `reserve_appointment` tool.
+The bridge then:
+
+1. builds a data-minimal confirmation (Option 1, no reason/PII): `type`, `office`,
+   `datetime`, `reference`, `subject = sha256(chat key)`, `issuedBy`, `issuedAt`,
+2. stores it on Swarm via a **Bee** node and gets a content address (hash),
+3. appends the office, time, reference, and `bzz://<hash>` to the reply (deterministically,
+   so the verifiable hash is always present).
+
+Bee dev mode exposes two APIs: the data API (`:1633`, `/bytes` upload and download) and the
+debug API (`:1635`, `/stamps`). A postage stamp is bought once and reused.
+
+Verify a confirmation by its hash: `GET http://localhost:1633/bytes/<hash>` returns the exact
+bytes. Because the address is the content hash, the file cannot be altered under the same
+hash. The citizen and the office read the same hash and get the identical, PII-free proof.
+Dev mode is local; a funded node would make the hash retrievable from any public Swarm gateway.
+
 ## Session mapping (multi-user)
 
 ```
@@ -80,7 +105,7 @@ identity anchor.
 | Requirement | Satisfied by |
 |---|---|
 | Infrastructure / Public Infra | Status channel, censorship-resistant, edge-deployable |
-| Real-World Blockchain Adoption | Swarm decentralized storage for tamper-proof completion confirmations (planned) |
+| Real-World Blockchain Adoption | Swarm storage for tamper-proof, PII-free appointment confirmations |
 | Decentralized AI | pluggable provider: Nebius today, a decentralized one later (FLock.io story) |
 | Nebius track | all inference runs on Token Factory |
 
@@ -113,9 +138,15 @@ All shapes below were confirmed end-to-end with a real message from the Status a
 │   ├── requirements.txt
 │   └── README.md
 ├── bridge/                  # Status-to-LLM bridge
-│   ├── bridge.py
+│   ├── bridge.py            # signals listener, reserve_appointment tool
+│   ├── swarm.py             # store/read confirmations on Swarm
 │   └── requirements.txt
-└── tools/                   # dev utilities
-    ├── nebius_toolcall_test.py   # proves tool-calling on Token Factory
-    └── requirements.txt
+├── swarm/                   # Bee node (dev mode) for Swarm storage
+│   └── docker-compose.yml
+├── tools/                   # dev utilities
+│   ├── nebius_toolcall_test.py
+│   └── requirements.txt
+└── slides/                  # Marp pitch deck
+    ├── deck.md
+    └── assets/              # Status, Nebius logos
 ```
