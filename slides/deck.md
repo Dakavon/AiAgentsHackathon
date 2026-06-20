@@ -7,6 +7,7 @@ title: Amtomat
 
 <!-- _class: lead -->
 <!-- _paginate: false -->
+<!-- _footer: ⚡ Powered by Nebius Token Factory -->
 
 # 🏛️🤖 Amtomat
 
@@ -105,15 +106,11 @@ Citizen and office verify the **same Swarm hash** without revealing details.
 ## 🎯 The two tracks we apply for
 
 🏗️ **Infrastructure**
-- the Status bridge: private, encrypted, no-phone-number access to **any** AI agent
-- channel-agnostic, censorship-resistant, on a headless status-go node
+- a private, encrypted, no-phone-number channel to any AI agent
 
 ⛓️ **BGA (Blockchain for Good)**
-- 🏛️ public infra and social impact: an agent that handles bureaucracy for everyone
-- 🐝 real-world Web3: verifiable, private confirmations on Swarm
-- 🌐 decentralized AI over a decentralized channel
-
-<!-- _footer: Powered by Nebius Token Factory -->
+- an agent that reaches the Amt for you
+- 🐝 verifiable, private confirmations on Swarm
 
 ---
 
