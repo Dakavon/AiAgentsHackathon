@@ -1,0 +1,23 @@
+# Secrets — never commit
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# status-go / runtime data (keystore, accounts, db)
+status/data/
+*.sqlite
+*.sqlite3
+
+# local Claude Code settings (personal)
+.claude/settings.local.json
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
