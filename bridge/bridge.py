@@ -27,8 +27,10 @@ Run (node must be up):
     python bridge.py
 """
 
+import hashlib
 import json
 import os
+import secrets
 import threading
 import time
 
@@ -36,6 +38,8 @@ import requests
 import websocket  # websocket-client
 from dotenv import load_dotenv
 from openai import OpenAI
+
+import swarm  # local module (bridge/swarm.py)
 
 # load repo-root .env (NEBIUS_API_KEY) as well as a local one if present
 _here = os.path.dirname(os.path.abspath(__file__))
@@ -68,10 +72,12 @@ SYSTEM_PROMPT = (
     "municipal and government services such as registering a residence, ID and "
     "passport, vehicle registration, business registration, certificates and "
     "permits. For a request, name the responsible office, the documents needed, "
-    "any fees and processing time, and how to book an appointment. Reply in the "
-    "user's language. Be concrete and step-by-step. Ask only for the information "
-    "needed to point the person to the right service. Keep replies short and "
-    "actionable."
+    "any fees and processing time. When the request needs an in-person visit (for "
+    "example a lost passport or ID, or a residence registration), reserve an "
+    "appointment with the reserve_appointment tool, and tell the person the office and "
+    "the documents to bring. Do not write the appointment time, the reference code, or "
+    "a confirmation link yourself; the system appends those. Reply in the user's "
+    "language. Be concrete and step-by-step. Keep replies short and actionable."
 )
 
 _history: dict[str, list[dict]] = {}
@@ -128,6 +134,78 @@ def send_message(chat_id: str, text: str) -> None:
 
 
 # --- LLM ------------------------------------------------------------------
+# --- agent tools --------------------------------------------------------
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "reserve_appointment",
+            "description": (
+                "Reserve an in-person appointment at the responsible public office and "
+                "store a verifiable, privacy-preserving confirmation on Swarm. Call this "
+                "when the user needs to appear in person (for example a lost passport or "
+                "ID, or a residence registration). Pick a concrete office and a "
+                "near-future slot."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "office": {
+                        "type": "string",
+                        "description": "Responsible office, e.g. 'Buergeramt Mitte'",
+                    },
+                    "datetime": {
+                        "type": "string",
+                        "description": "Date and time, ISO 8601, e.g. 2026-07-01T10:00",
+                    },
+                },
+                "required": ["office", "datetime"],
+            },
+        },
+    }
+]
+
+
+def reserve_appointment(session_id: str, office: str, when: str) -> dict:
+    """Build a data-minimal confirmation, store it on Swarm, return the result."""
+    subject = hashlib.sha256(session_id.encode()).hexdigest()
+    reference = "APT-" + secrets.token_hex(3).upper()
+    confirmation = {
+        "type": "appointment-confirmation",
+        "office": office or "Buergeramt",
+        "datetime": when,
+        "reference": reference,
+        "subject": f"sha256:{subject}",  # anonymous anchor, no PII
+        "issuedBy": "Amtomat",
+        "issuedAt": int(time.time()),
+    }
+    try:
+        ref = swarm.store_confirmation(confirmation)
+    except Exception as e:  # noqa: BLE001
+        print(f"[swarm] store failed: {e}")
+        return {"status": "error", "error": str(e)}
+    print(f"[swarm] confirmation {reference} stored -> {ref}")
+    return {
+        "status": "reserved",
+        "office": confirmation["office"],
+        "datetime": when,
+        "reference": reference,
+        "swarm_reference": ref,
+        "swarm_url": f"bzz://{ref}",
+    }
+
+
+def _run_tool(session_id: str, tc) -> dict:
+    name = tc.function.name
+    try:
+        args = json.loads(tc.function.arguments or "{}")
+    except json.JSONDecodeError:
+        args = {}
+    if name == "reserve_appointment":
+        return reserve_appointment(session_id, args.get("office", ""), args.get("datetime", ""))
+    return {"error": f"unknown tool {name}"}
+
+
 def ask_llm(session_id: str, user_text: str) -> str:
     if LLM_MODE == "hermes":
         resp = _hermes.chat.completions.create(
@@ -137,14 +215,45 @@ def ask_llm(session_id: str, user_text: str) -> str:
         )
         return resp.choices[0].message.content or ""
 
-    msgs = _history.setdefault(session_id, [{"role": "system", "content": SYSTEM_PROMPT}])
-    msgs.append({"role": "user", "content": user_text})
-    resp = _llm.chat.completions.create(model=NEBIUS_MODEL, messages=msgs)
-    answer = resp.choices[0].message.content or ""
-    msgs.append({"role": "assistant", "content": answer})
-    if len(msgs) > 21:  # cap rolling history
-        _history[session_id] = [msgs[0]] + msgs[-20:]
-    return answer
+    history = _history.setdefault(session_id, [{"role": "system", "content": SYSTEM_PROMPT}])
+    # work on a copy so tool-call/result pairs do not pollute the rolling history
+    msgs = list(history) + [{"role": "user", "content": user_text}]
+    final = ""
+    reserved = None
+    for _ in range(4):  # allow a couple of tool rounds
+        resp = _llm.chat.completions.create(
+            model=NEBIUS_MODEL, messages=msgs, tools=TOOLS, tool_choice="auto"
+        )
+        m = resp.choices[0].message
+        if not m.tool_calls:
+            final = m.content or ""
+            break
+        msgs.append(m.model_dump())
+        for tc in m.tool_calls:
+            result = _run_tool(session_id, tc)
+            if isinstance(result, dict) and result.get("status") == "reserved":
+                reserved = result
+            msgs.append(
+                {"role": "tool", "tool_call_id": tc.id, "content": json.dumps(result)}
+            )
+
+    # Deterministically append the appointment confirmation so the verifiable Swarm
+    # reference is always present, regardless of what the model chose to write.
+    if reserved:
+        final = (
+            final.rstrip()
+            + "\n\n"
+            + f"📅 {reserved['office']}, {reserved['datetime']}\n"
+            + f"🔖 {reserved['reference']}\n"
+            + f"🐝 Confirmation on Swarm: {reserved['swarm_url']}"
+        )
+
+    # persist only a clean user+assistant turn
+    history.append({"role": "user", "content": user_text})
+    history.append({"role": "assistant", "content": final})
+    if len(history) > 21:
+        _history[session_id] = [history[0]] + history[-20:]
+    return final
 
 
 # --- core: process one chat's recent messages -----------------------------

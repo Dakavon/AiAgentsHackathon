@@ -14,6 +14,12 @@ status/data/
 *.sqlite
 *.sqlite3
 
+# rendered slides (build artifacts; keep the .md source and assets/)
+slides/deck.html
+slides/deck.pdf
+slides/deck.pptx
+slides/deck.*.png
+
 # local Claude Code settings (personal)
 .claude/settings.local.json
 

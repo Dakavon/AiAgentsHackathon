@@ -1,0 +1,11 @@
+services:
+  bee:
+    # Pinned to 1.18.2: it has `bee dev` (in-memory node with free postage stamps,
+    # no funding). Bee 2.x removed the dev command. Swap for a real funded node later.
+    image: ethersphere/bee:1.18.2
+    container_name: amtomat-bee
+    command: dev --api-addr 0.0.0.0:1633 --debug-api-addr 0.0.0.0:1635 --debug-api-enable
+    ports:
+      - "1633:1633"   # data API: /bzz, /bytes
+      - "1635:1635"   # debug API: /stamps
+    restart: unless-stopped
