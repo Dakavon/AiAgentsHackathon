@@ -1,0 +1,18 @@
+services:
+  status-backend:
+    build:
+      context: .
+      args:
+        # newest tag that builds without the Nim/libsds toolchain (see Dockerfile)
+        STATUS_GO_REF: v10.31.0
+    container_name: status-backend
+    ports:
+      # host:container, the bootstrap/bridge talk to localhost:12345
+      - "12345:12345"
+    volumes:
+      # named volume keeps the bot account (and thus its chat key) stable
+      - status-data:/data
+    restart: unless-stopped
+
+volumes:
+  status-data:
