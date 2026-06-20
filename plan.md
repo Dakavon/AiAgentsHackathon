@@ -1,6 +1,6 @@
-# Project Plan & Status
+# Amtomat: Project Plan & Status
 
-**Status-native Ämterservice Agent.** An AI public-administration assistant reachable
+**Amtomat** (Amt + Automat). An AI public-administration assistant reachable
 over the decentralized Status messenger, powered by Nebius, with decentralized proof
 of completed steps on Swarm.
 

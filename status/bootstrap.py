@@ -32,7 +32,7 @@ WS = f"ws://{ADDR}/signals"
 # Account config. RootDataDir is a path INSIDE the container (the mounted volume).
 ROOT_DATA_DIR = os.environ.get("STATUS_ROOT_DATA_DIR", "/data")
 PASSWORD = os.environ.get("STATUS_ACCOUNT_PASSWORD", "hackathon-demo-pw")
-DISPLAY_NAME = os.environ.get("STATUS_DISPLAY_NAME", "PublicServicesBot")
+DISPLAY_NAME = os.environ.get("STATUS_DISPLAY_NAME", "Amtomat")
 CUSTOMIZATION_COLOR = os.environ.get("STATUS_COLOR", "blue")
 # Must match the fleet the real Status app uses, or 1:1 messages won't reach it.
 WAKU_FLEET = os.environ.get("STATUS_FLEET", "status.prod")

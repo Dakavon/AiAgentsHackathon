@@ -62,8 +62,9 @@ HERMES_BASE_URL = os.environ.get("HERMES_BASE_URL", "http://localhost:8080/v1/")
 HERMES_API_KEY = os.environ.get("HERMES_API_KEY", "hermes")
 
 SYSTEM_PROMPT = (
-    "You are a multilingual public-administration assistant (an 'Ämterservice' "
-    "agent) reachable over the Status messenger. You help residents navigate "
+    "You are Amtomat, a multilingual public-administration assistant (a "
+    "conversational 'Ämterservice') reachable over the Status messenger. You help "
+    "residents navigate "
     "municipal and government services such as registering a residence, ID and "
     "passport, vehicle registration, business registration, certificates and "
     "permits. For a request, name the responsible office, the documents needed, "

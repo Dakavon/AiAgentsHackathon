@@ -1,7 +1,10 @@
-# Status-native Public-Administration Agent
+# Amtomat
 
-An AI **public-administration assistant** (a conversational *Ämterservice*) reachable
-over the decentralized **Status** messenger, with no phone number, no KYC, and
+*The self-service public office in your messenger.*
+
+**Amtomat** (Amt + Automat) is an AI **public-administration assistant** (a conversational
+*Ämterservice*) reachable over the decentralized **Status** messenger, with no phone
+number, no KYC, and
 end-to-end encryption. Instead of browsing a municipality's A-Z list of services,
 residents just ask in natural language, in their own language: which office is
 responsible, the documents required, fees, processing time, and how to book an

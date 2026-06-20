@@ -1,4 +1,4 @@
-# Architecture: Status-native Public-Administration Agent
+# Amtomat: Architecture
 
 A conversational *Ämterservice* (public-administration assistant) reachable over the
 **Status** messenger (web3-native, no phone number, end-to-end encrypted). Residents
